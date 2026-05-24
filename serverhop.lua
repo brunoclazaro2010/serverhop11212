@@ -254,8 +254,8 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 -- ==================== VARIÁVEIS ====================
-local hopActive = true  -- Começa ligado
-local autoModeEnabled = true  -- Começa ligado
+local hopActive = true
+local autoModeEnabled = true
 
 local statusLabel = Instance.new("TextLabel", frame)
 statusLabel.Size = UDim2.new(1, -30, 0, 20)
@@ -323,6 +323,15 @@ local function isBlacklisted(id)
     return false
 end
 
+-- ==================== FUNÇÃO PARA EMBARALHAR ARRAY ====================
+local function shuffleArray(t)
+    for i = #t, 2, -1 do
+        local j = math.random(i)
+        t[i], t[j] = t[j], t[i]
+    end
+    return t
+end
+
 -- Função parseValue para números (K/M/B)
 local function parseValue(text)
     text = text:lower()
@@ -345,11 +354,11 @@ local function formatValue(n)
     end
 end
 
--- Server Hop principal
+-- Server Hop principal com servidores ALEATÓRIOS
 local function doServerHop()
     if not hopActive then return end
     
-    statusLabel.Text = "Status: Iniciando busca..."
+    statusLabel.Text = "Status: Iniciando busca aleatória..."
     
     local placeId = game.PlaceId
     local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100"
@@ -366,34 +375,41 @@ local function doServerHop()
     local decoded = HttpService:JSONDecode(content)
     
     if decoded and decoded.data then
+        -- Filtra servidores válidos
+        local validServers = {}
         for _, server in ipairs(decoded.data) do
-            if not hopActive then break end
-            
             if server.playing < server.maxPlayers 
             and server.id ~= game.JobId 
             and not isBlacklisted(server.id) then
-                
-                addServerToBlacklist(server.id)
-                statusLabel.Text = "Status: Teleportando..."
-                
-                pcall(function()
-                    if autoModeEnabled then
-                        if writefile then
-                            writefile(folderName .. "/AutoMode.txt", "true")
-                        end
-                    end
-                    TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
-                end)
-                
-                task.wait(2)
+                table.insert(validServers, server)
             end
         end
         
-        if hopActive then
-            statusLabel.Text = "Status: Nenhum serv. livre"
-            if autoModeEnabled then
+        -- Embaralha e pega um servidor aleatório
+        if #validServers > 0 then
+            local shuffledServers = shuffleArray(validServers)
+            local selectedServer = shuffledServers[1]
+            
+            addServerToBlacklist(selectedServer.id)
+            statusLabel.Text = "Status: Teleportando para servidor aleatório..."
+            
+            pcall(function()
+                if autoModeEnabled then
+                    if writefile then
+                        writefile(folderName .. "/AutoMode.txt", "true")
+                    end
+                end
+                TeleportService:TeleportToPlaceInstance(placeId, selectedServer.id, player)
+            end)
+            
+            task.wait(2)
+        else
+            if hopActive and autoModeEnabled then
+                statusLabel.Text = "Status: Nenhum serv. livre, tentando novamente..."
                 task.wait(2)
-                doServerHop()
+                if hopActive then
+                    doServerHop()
+                end
             end
         end
     else
@@ -592,13 +608,10 @@ loadBlacklist()
 
 -- Inicia a busca automaticamente ao carregar o script
 task.spawn(function()
-    -- Aguarda o personagem carregar
     repeat task.wait() until player.Character
     task.wait(2)
     
-    -- Se o modo automático estiver ligado, começa a buscar
     if autoModeEnabled and hopActive then
-        -- Verifica se tem valor alvo
         local target = tonumber(textBox.Text)
         if target and target > 0 then
             statusLabel.Text = "Status: Verificando alvo " .. formatValue(target)
