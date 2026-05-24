@@ -253,14 +253,16 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
-local hopActive = false
-local autoModeEnabled = false
+-- ==================== VARIÁVEIS ====================
+local hopActive = true  -- Começa ligado
+local autoModeEnabled = true  -- Começa ligado
+
 local statusLabel = Instance.new("TextLabel", frame)
 statusLabel.Size = UDim2.new(1, -30, 0, 20)
 statusLabel.Position = UDim2.new(0, 15, 0, 195)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Status: Aguardando"
-statusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+statusLabel.Text = "Auto: Ligado - Buscando..."
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
 statusLabel.TextSize = 10
 statusLabel.Font = Enum.Font.GothamBold
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -436,8 +438,6 @@ local function scanOverhead(overhead)
             statusLabel.Text = "Brainrot detectado!"
             statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
             
-            -- NÃO desliga o modo automático, só mostra a mensagem
-            
             task.delay(5, function()
                 if brainrotLabel.Text == ("🧠 BRAINROT: " .. (name or "Brainrot") .. " | " .. income) then
                     brainrotLabel.Text = ""
@@ -579,7 +579,7 @@ task.spawn(function()
             delfile(folderName .. "/AutoMode.txt")
             
             repeat task.wait() until player.Character
-            task.wait(2) -- Alterado de 5 para 2 segundos
+            task.wait(2)
             
             if hopActive then
                 doServerHop()
@@ -589,6 +589,52 @@ task.spawn(function()
 end)
 
 loadBlacklist()
+
+-- Inicia a busca automaticamente ao carregar o script
+task.spawn(function()
+    -- Aguarda o personagem carregar
+    repeat task.wait() until player.Character
+    task.wait(2)
+    
+    -- Se o modo automático estiver ligado, começa a buscar
+    if autoModeEnabled and hopActive then
+        -- Verifica se tem valor alvo
+        local target = tonumber(textBox.Text)
+        if target and target > 0 then
+            statusLabel.Text = "Status: Verificando alvo " .. formatValue(target)
+            task.wait(1)
+            
+            local maxFound = 0
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj.Name:lower():find("overhead") then
+                    for _, gui in pairs(obj:GetDescendants()) do
+                        if gui:IsA("TextLabel") then
+                            local text = gui.Text:lower()
+                            if text:find("%$") and (text:find("/s") or text:find("sec")) then
+                                local val = parseValue(text)
+                                if val > maxFound then maxFound = val end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if maxFound >= target then
+                statusLabel.Text = "Alvo " .. formatValue(target) .. "+ Detectado!"
+                statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                hopActive = false
+                autoModeEnabled = false
+                autoButtonFrame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+                autoButtonStroke.Thickness = 4
+                autoButtonLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            else
+                doServerHop()
+            end
+        else
+            doServerHop()
+        end
+    end
+end)
 
 -- ==================== ANIMAÇÃO DAS BORDAS ====================
 
